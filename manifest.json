@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "多站点Header提取器",
+  "version": "1.0.0",
+  "description": "提取多个网站请求中的header字段（azjtk、authorization、cookie）",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "webRequest",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://external-gw.woaizuji.com/*", "https://go-micro.rrzu.com/*", "https://admin.rrzu.com/*"],
+      "js": ["content.js"]
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "多站点Header提取器"
+  },
+  "icons": {
+  }
+}
