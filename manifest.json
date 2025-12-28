@@ -7,7 +7,8 @@
     "activeTab",
     "storage",
     "webRequest",
-    "clipboardWrite"
+    "clipboardWrite",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -17,8 +18,16 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://external-gw.woaizuji.com/*", "https://go-micro.rrzu.com/*", "https://admin.rrzu.com/*"],
-      "js": ["content.js"]
+      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*"]
     }
   ],
   "action": {

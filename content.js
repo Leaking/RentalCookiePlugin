@@ -1,15 +1,63 @@
-// content.js - 内容脚本，在页面中运行
+// content.js - 内容脚本（隔离环境）
+// 负责注入拦截脚本，并接收消息转发给 background script
 (function() {
     'use strict';
-    
-    console.log('多站点Header提取器 content script 已加载');
-    
-    // 创建一个浮动提示元素
+
+    console.log('📦 [Content Script] 已加载');
+
+    // ============================================
+    // 1. 注入拦截脚本到页面主世界（使用外部文件绕过 CSP）
+    // ============================================
+    function injectScript() {
+        const script = document.createElement('script');
+        script.src = chrome.runtime.getURL('injected.js');
+        script.onload = function() {
+            console.log('✅ [Content Script] injected.js 已加载');
+            this.remove(); // 加载完成后移除 script 标签
+        };
+        script.onerror = function() {
+            console.error('❌ [Content Script] injected.js 加载失败');
+        };
+        (document.head || document.documentElement).appendChild(script);
+    }
+
+    // 尽早注入
+    injectScript();
+
+    // ============================================
+    // 2. 监听来自 injected.js 的消息 (通过 postMessage)
+    // ============================================
+    window.addEventListener('message', function(event) {
+        if (event.source !== window) return;
+
+        if (event.data && event.data.type === 'WOAIZUJI_MERCHANT_INFO') {
+            console.log('📨 [Content Script] 收到商家信息:', event.data);
+
+            // 转发给 background script
+            chrome.runtime.sendMessage({
+                type: 'MERCHANT_INFO_EXTRACTED',
+                site: 'woaizuji',
+                data: {
+                    merchantCode: event.data.merchantCode,
+                    merchantName: event.data.merchantName
+                }
+            });
+
+            // 显示通知
+            showNotificationWhenReady('🏪 商家: ' + (event.data.merchantName || event.data.merchantCode));
+        }
+    });
+
+    // ============================================
+    // 3. 通知功能
+    // ============================================
     let notification = null;
-    
+    let pendingNotifications = [];
+
     function createNotification() {
         if (notification) return notification;
-        
+        if (!document.body) return null;
+
         notification = document.createElement('div');
         notification.id = 'azjtk-notification';
         notification.style.cssText = `
@@ -28,126 +76,60 @@
             display: none;
             max-width: 300px;
             word-wrap: break-word;
-            animation: slideIn 0.3s ease-out;
         `;
-        
-        // 添加动画样式
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-            
-            @keyframes slideOut {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-        
         document.body.appendChild(notification);
         return notification;
     }
-    
+
     function showNotification(message, duration = 3000) {
         const notif = createNotification();
+        if (!notif) return;
+
         notif.textContent = message;
         notif.style.display = 'block';
-        
+
         setTimeout(() => {
-            notif.style.animation = 'slideOut 0.3s ease-in';
-            setTimeout(() => {
-                notif.style.display = 'none';
-                notif.style.animation = 'slideIn 0.3s ease-out';
-            }, 300);
+            notif.style.display = 'none';
         }, duration);
     }
-    
-    // 监听来自background script的消息
+
+    function showNotificationWhenReady(message) {
+        if (document.body) {
+            showNotification(message);
+        } else {
+            pendingNotifications.push(message);
+        }
+    }
+
+    // ============================================
+    // 4. 监听来自 background script 的消息
+    // ============================================
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.type === 'HEADER_EXTRACTED') {
-            console.log('收到Header提取通知:', message.data);
-            
-            // 根据不同网站显示不同通知
+            console.log('[Content Script] 收到Header提取通知:', message.data);
+
             if (window.location.hostname.includes('woaizuji.com') && message.data.woaizuji && message.data.woaizuji.azjtk) {
-                showNotification(`🎉 已提取AZJTK值: ${message.data.woaizuji.azjtk.substring(0, 20)}...`);
+                showNotificationWhenReady('🎉 已提取AZJTK值');
             } else if (window.location.hostname.includes('rrzu.com') && message.data.rrzu) {
-                let notificationText = '🎉 已提取Header: ';
-                if (message.data.rrzu.authorization) {
-                    notificationText += 'Authorization ';
-                }
-                if (message.data.rrzu.cookie) {
-                    notificationText += 'Cookie ';
-                }
-                showNotification(notificationText);
+                showNotificationWhenReady('🎉 已提取Header');
             }
-            
-            // 可以在这里添加更多页面交互逻辑
-            // 比如高亮显示某些元素，或者在页面上显示提取状态
         }
     });
-    
-    // 监听页面的网络请求（作为备用方案）
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-        const url = args[0];
-        console.log('检测到请求:', url);
 
-        if (typeof url === 'string') {
-            if (url.includes('merchantOrder/orderList')) {
-                console.log('检测到woaizuji订单列表请求:', url);
-            } else if (url.includes('order/orderList')) {
-                console.log('检测到rrzu订单列表请求:', url);
-            }
-        }
-        
-        return originalFetch.apply(this, args);
-    };
-    
-    // 监听XMLHttpRequest（作为备用方案）
-    const originalXHROpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...args) {
-        if (typeof url === 'string') {
-            if (url.includes('merchantOrder/orderList')) {
-                console.log('检测到woaizuji XHR订单列表请求:', url);
-            } else if (url.includes('order/orderList')) {
-                console.log('检测到rrzu XHR订单列表请求:', url);
-            }
-        }
-        
-        return originalXHROpen.call(this, method, url, ...args);
-    };
-    
-    // 页面加载完成后的初始化
+    // ============================================
+    // 5. 初始化
+    // ============================================
+    function initialize() {
+        console.log('📍 [Content Script] 初始化完成');
+
+        pendingNotifications.forEach(msg => showNotification(msg));
+        pendingNotifications = [];
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initialize);
     } else {
         initialize();
     }
-    
-    function initialize() {
-        console.log('多站点Header提取器已在页面中初始化');
-        
-        // 检查是否在目标页面
-        if (window.location.hostname.includes('woaizuji.com')) {
-            console.log('检测到woaizuji网站，插件已激活');
-        } else if (window.location.hostname.includes('rrzu.com')) {
-            console.log('检测到rrzu网站，插件已激活');
-            console.log('当前页面:', window.location.href);
-        }
-    }
-    
+
 })();

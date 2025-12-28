@@ -11,6 +11,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const woaizujiTimestamp = document.getElementById('woaizujiTimestamp');
     const woaizujiUrl = document.getElementById('woaizujiUrl');
     
+    // Woaizuji 商家信息元素
+    const woaizujiMerchantCode = document.getElementById('woaizujiMerchantCode');
+    const woaizujiMerchantName = document.getElementById('woaizujiMerchantName');
+
     // RRZU 元素
     const rrzuSection = document.getElementById('rrzuSection');
     const rrzuStatus = document.getElementById('rrzuStatus');
@@ -46,8 +50,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 显示Woaizuji数据
     function displayWoaizujiData(data) {
-        if (data && data.azjtk) {
-            azjtkValue.value = data.azjtk;
+        if (data && (data.azjtk || data.merchantCode || data.merchantName)) {
+            azjtkValue.value = data.azjtk || '';
+            woaizujiMerchantCode.value = data.merchantCode || '';
+            woaizujiMerchantName.value = data.merchantName || '';
             woaizujiTimestamp.textContent = data.timestamp || '未知';
             woaizujiUrl.textContent = data.url || '未知';
             woaizujiStatus.textContent = '✅ 已提取';
@@ -79,7 +85,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 显示提取的数据
     function displayData(data) {
-        let hasWoaizujiData = data && data.woaizuji && data.woaizuji.azjtk;
+        let hasWoaizujiData = data && data.woaizuji && (data.woaizuji.azjtk || data.woaizuji.merchantCode || data.woaizuji.merchantName);
         let hasRrzuData = data && data.rrzu && (data.rrzu.authorization || data.rrzu.cookie);
         
         displayWoaizujiData(data ? data.woaizuji : null);

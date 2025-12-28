@@ -3,7 +3,9 @@ let extractedData = {
   woaizuji: {
     azjtk: null,
     timestamp: null,
-    url: null
+    url: null,
+    merchantCode: null,
+    merchantName: null
   },
   rrzu: {
     authorization: null,
@@ -141,10 +143,33 @@ chrome.webRequest.onBeforeRequest.addListener(
   ["requestBody"]
 );
 
-// 监听来自popup的消息
+// 监听来自popup和content script的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_HEADER_DATA') {
     sendResponse(extractedData);
+  } else if (request.type === 'MERCHANT_INFO_EXTRACTED') {
+    // 处理来自 content script 的商家信息（仅 woaizuji）
+    const site = request.site;
+    const { merchantCode, merchantName } = request.data;
+
+    if (site === 'woaizuji' && (merchantCode || merchantName)) {
+      extractedData.woaizuji.merchantCode = merchantCode;
+      extractedData.woaizuji.merchantName = merchantName;
+      console.log('✅ 收到woaizuji商家信息:', { merchantCode, merchantName });
+
+      // 保存到storage
+      chrome.storage.local.set({ extractedData: extractedData });
+
+      // 通知所有tab更新
+      chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'HEADER_EXTRACTED',
+            data: extractedData
+          }).catch(() => {});
+        });
+      });
+    }
   }
 });
 
