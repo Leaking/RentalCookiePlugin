@@ -18,7 +18,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*"],
+      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*", "*://admin.rrzu.com/*"],
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": true
@@ -27,7 +27,7 @@
   "web_accessible_resources": [
     {
       "resources": ["injected.js"],
-      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*"]
+      "matches": ["*://*.woaizuji.com/*", "*://*.rrzu.com/*", "*://admin.rrzu.com/*"]
     }
   ],
   "action": {

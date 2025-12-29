@@ -18,6 +18,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // RRZU 元素
     const rrzuSection = document.getElementById('rrzuSection');
     const rrzuStatus = document.getElementById('rrzuStatus');
+    const rrzuMerchantCode = document.getElementById('rrzuMerchantCode');
+    const rrzuMerchantName = document.getElementById('rrzuMerchantName');
+    const rrzuCompany = document.getElementById('rrzuCompany');
+    const rrzuLicenseNo = document.getElementById('rrzuLicenseNo');
     const authorizationValue = document.getElementById('authorizationValue');
     const cookieValue = document.getElementById('cookieValue');
     const rrzuTimestamp = document.getElementById('rrzuTimestamp');
@@ -68,7 +72,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 显示RRZU数据
     function displayRrzuData(data) {
-        if (data && (data.authorization || data.cookie)) {
+        console.log('📊 [Popup] displayRrzuData 收到数据:', data);
+        if (data && (data.authorization || data.cookie || data.company || data.licenseNo || data.merchantCode || data.merchantName)) {
+            console.log('📊 [Popup] 显示RRZU数据, merchantCode:', data.merchantCode, 'merchantName:', data.merchantName);
+            rrzuMerchantCode.value = data.merchantCode || '';
+            rrzuMerchantName.value = data.merchantName || '';
+            rrzuCompany.value = data.company || '';
+            rrzuLicenseNo.value = data.licenseNo || '';
             authorizationValue.value = data.authorization || '';
             cookieValue.value = data.cookie || '';
             rrzuTimestamp.textContent = data.timestamp || '未知';
@@ -86,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 显示提取的数据
     function displayData(data) {
         let hasWoaizujiData = data && data.woaizuji && (data.woaizuji.azjtk || data.woaizuji.merchantCode || data.woaizuji.merchantName);
-        let hasRrzuData = data && data.rrzu && (data.rrzu.authorization || data.rrzu.cookie);
+        let hasRrzuData = data && data.rrzu && (data.rrzu.authorization || data.rrzu.cookie || data.rrzu.company || data.rrzu.licenseNo || data.rrzu.merchantCode || data.rrzu.merchantName);
         
         displayWoaizujiData(data ? data.woaizuji : null);
         displayRrzuData(data ? data.rrzu : null);

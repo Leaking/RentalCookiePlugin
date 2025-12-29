@@ -11,7 +11,11 @@ let extractedData = {
     authorization: null,
     cookie: null,
     timestamp: null,
-    url: null
+    url: null,
+    company: null,
+    licenseNo: null,
+    merchantCode: null,
+    merchantName: null
   }
 };
 
@@ -148,28 +152,45 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_HEADER_DATA') {
     sendResponse(extractedData);
   } else if (request.type === 'MERCHANT_INFO_EXTRACTED') {
-    // 处理来自 content script 的商家信息（仅 woaizuji）
+    // 处理来自 content script 的商家信息
     const site = request.site;
-    const { merchantCode, merchantName } = request.data;
 
-    if (site === 'woaizuji' && (merchantCode || merchantName)) {
-      extractedData.woaizuji.merchantCode = merchantCode;
-      extractedData.woaizuji.merchantName = merchantName;
-      console.log('✅ 收到woaizuji商家信息:', { merchantCode, merchantName });
-
-      // 保存到storage
-      chrome.storage.local.set({ extractedData: extractedData });
-
-      // 通知所有tab更新
-      chrome.tabs.query({}, (tabs) => {
-        tabs.forEach(tab => {
-          chrome.tabs.sendMessage(tab.id, {
-            type: 'HEADER_EXTRACTED',
-            data: extractedData
-          }).catch(() => {});
-        });
-      });
+    if (site === 'woaizuji') {
+      const { merchantCode, merchantName } = request.data;
+      if (merchantCode || merchantName) {
+        extractedData.woaizuji.merchantCode = merchantCode;
+        extractedData.woaizuji.merchantName = merchantName;
+        console.log('✅ 收到woaizuji商家信息:', { merchantCode, merchantName });
+      }
+    } else if (site === 'rrzu') {
+      const { company, licenseNo } = request.data;
+      if (company || licenseNo) {
+        extractedData.rrzu.company = company;
+        extractedData.rrzu.licenseNo = licenseNo;
+        console.log('✅ 收到rrzu商家信息:', { company, licenseNo });
+      }
+    } else if (site === 'rrzu_order') {
+      const { merchantCode, merchantName } = request.data;
+      if (merchantCode || merchantName) {
+        extractedData.rrzu.merchantCode = merchantCode;
+        extractedData.rrzu.merchantName = merchantName;
+        extractedData.rrzu.timestamp = new Date().toLocaleString('zh-CN');
+        console.log('✅ 收到rrzu orderList商家信息:', { merchantCode, merchantName });
+      }
     }
+
+    // 保存到storage
+    chrome.storage.local.set({ extractedData: extractedData });
+
+    // 通知所有tab更新
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'HEADER_EXTRACTED',
+          data: extractedData
+        }).catch(() => {});
+      });
+    });
   }
 });
 
