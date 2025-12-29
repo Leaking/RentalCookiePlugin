@@ -3,22 +3,34 @@
 (function() {
     'use strict';
 
-    console.log('📦 [Content Script] 已加载');
+    console.log('📦 [Content Script] 已加载, hostname:', window.location.hostname, 'href:', window.location.href);
 
     // ============================================
     // 1. 注入拦截脚本到页面主世界（使用外部文件绕过 CSP）
     // ============================================
     function injectScript() {
+        console.log('🔧 [Content Script] 开始注入 injected.js...');
+        const scriptUrl = chrome.runtime.getURL('injected.js');
+        console.log('🔧 [Content Script] injected.js URL:', scriptUrl);
+
         const script = document.createElement('script');
-        script.src = chrome.runtime.getURL('injected.js');
+        script.src = scriptUrl;
         script.onload = function() {
-            console.log('✅ [Content Script] injected.js 已加载');
+            console.log('✅ [Content Script] injected.js 已加载到页面');
             this.remove(); // 加载完成后移除 script 标签
         };
-        script.onerror = function() {
-            console.error('❌ [Content Script] injected.js 加载失败');
+        script.onerror = function(e) {
+            console.error('❌ [Content Script] injected.js 加载失败:', e);
         };
-        (document.head || document.documentElement).appendChild(script);
+
+        const target = document.head || document.documentElement;
+        console.log('🔧 [Content Script] 注入目标:', target ? target.tagName : 'null');
+        if (target) {
+            target.appendChild(script);
+            console.log('🔧 [Content Script] script 标签已添加');
+        } else {
+            console.error('❌ [Content Script] 找不到注入目标');
+        }
     }
 
     // 尽早注入
@@ -30,8 +42,9 @@
     window.addEventListener('message', function(event) {
         if (event.source !== window) return;
 
+        // 处理 woaizuji 商家信息
         if (event.data && event.data.type === 'WOAIZUJI_MERCHANT_INFO') {
-            console.log('📨 [Content Script] 收到商家信息:', event.data);
+            console.log('📨 [Content Script] 收到woaizuji商家信息:', event.data);
 
             // 转发给 background script
             chrome.runtime.sendMessage({
@@ -45,6 +58,42 @@
 
             // 显示通知
             showNotificationWhenReady('🏪 商家: ' + (event.data.merchantName || event.data.merchantCode));
+        }
+
+        // 处理 rrzu server/detail 商家信息
+        if (event.data && event.data.type === 'RRZU_MERCHANT_INFO') {
+            console.log('📨 [Content Script] 收到rrzu商家信息:', event.data);
+
+            // 转发给 background script
+            chrome.runtime.sendMessage({
+                type: 'MERCHANT_INFO_EXTRACTED',
+                site: 'rrzu',
+                data: {
+                    company: event.data.company,
+                    licenseNo: event.data.licenseNo
+                }
+            });
+
+            // 显示通知
+            showNotificationWhenReady('🏢 商家: ' + (event.data.company || event.data.licenseNo));
+        }
+
+        // 处理 rrzu orderList 商家信息
+        if (event.data && event.data.type === 'RRZU_ORDER_MERCHANT_INFO') {
+            console.log('📨 [Content Script] 收到rrzu orderList商家信息:', event.data);
+
+            // 转发给 background script
+            chrome.runtime.sendMessage({
+                type: 'MERCHANT_INFO_EXTRACTED',
+                site: 'rrzu_order',
+                data: {
+                    merchantCode: event.data.merchantCode,
+                    merchantName: event.data.merchantName
+                }
+            });
+
+            // 显示通知
+            showNotificationWhenReady('🏢 商家: ' + (event.data.merchantName || event.data.merchantCode));
         }
     });
 
