@@ -29,6 +29,12 @@
 
     function saveToLocalStorage(platform, merchantData) {
         try {
+            // 验证商家编码和名称都不为空
+            if (!merchantData.merchantCode || !merchantData.merchantName) {
+                console.log('⚠️ [Content Script] 商家编码或名称为空，放弃保存:', merchantData);
+                return;
+            }
+
             const existingData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
 
             // 获取该平台的商家列表并更新

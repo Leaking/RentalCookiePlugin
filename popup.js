@@ -133,17 +133,16 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayData(data) {
         merchantList.innerHTML = '';
 
-        const isMerchantObject = (value) =>
-            value && typeof value === 'object' && (
-                value.merchantCode || value.merchantName || value.azjtk || value.authorization || value.cookie
-            );
+        // 验证商家对象：必须同时有 merchantCode 和 merchantName
+        const isValidMerchant = (value) =>
+            value && typeof value === 'object' && value.merchantCode && value.merchantName;
 
         const normalizeMerchants = (raw) => {
             if (!raw) return [];
-            if (Array.isArray(raw)) return raw.filter(isMerchantObject);
-            if (isMerchantObject(raw)) return [raw];
+            if (Array.isArray(raw)) return raw.filter(isValidMerchant);
+            if (isValidMerchant(raw)) return [raw];
             if (typeof raw === 'object') {
-                return Object.values(raw).filter(isMerchantObject);
+                return Object.values(raw).filter(isValidMerchant);
             }
             return [];
         };

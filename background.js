@@ -23,28 +23,38 @@ chrome.storage.local.get(['extractedData'], (result) => {
   }
 });
 
-// 更新或添加商家数据
+// 更新或添加商家数据（仅当 merchantCode 和 merchantName 都存在时才保存）
 function upsertMerchant(platform, newData) {
   const list = extractedData[platform];
   const merchantCode = newData.merchantCode;
+  const merchantName = newData.merchantName;
 
-  if (merchantCode) {
-    // 有 merchantCode，按 merchantCode 匹配
-    const index = list.findIndex(m => m.merchantCode === merchantCode);
-    if (index >= 0) {
-      // 更新现有商家
-      list[index] = { ...list[index], ...newData };
-    } else {
-      // 新增商家
-      list.push(newData);
-    }
-  } else {
-    // 没有 merchantCode，创建临时记录（等待后续补充）
-    // 查找是否有未绑定 merchantCode 的临时记录
+  // 验证商家编码和名称都不为空
+  if (!merchantCode || !merchantName) {
+    console.log('⚠️ 商家编码或名称为空，暂存到临时记录:', newData);
+    // 仅更新临时记录（用于后续合并 token 等信息）
     const tempIndex = list.findIndex(m => !m.merchantCode);
     if (tempIndex >= 0) {
       list[tempIndex] = { ...list[tempIndex], ...newData };
     } else {
+      list.push(newData);
+    }
+    // 不调用 saveAndNotify，不保存到 storage
+    return;
+  }
+
+  // 有 merchantCode 和 merchantName，按 merchantCode 匹配
+  const index = list.findIndex(m => m.merchantCode === merchantCode);
+  if (index >= 0) {
+    // 更新现有商家
+    list[index] = { ...list[index], ...newData };
+  } else {
+    // 查找临时记录并合并
+    const tempIndex = list.findIndex(m => !m.merchantCode);
+    if (tempIndex >= 0) {
+      list[tempIndex] = { ...list[tempIndex], ...newData };
+    } else {
+      // 新增商家
       list.push(newData);
     }
   }
