@@ -3,128 +3,193 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusElement = document.getElementById('status');
     const statusIcon = statusElement.querySelector('.status-icon');
     const statusText = statusElement.querySelector('.status-text');
-    
-    // Woaizuji 元素
-    const woaizujiSection = document.getElementById('woaizujiSection');
-    const woaizujiStatus = document.getElementById('woaizujiStatus');
-    const azjtkValue = document.getElementById('azjtkValue');
-    const woaizujiTimestamp = document.getElementById('woaizujiTimestamp');
-    const woaizujiUrl = document.getElementById('woaizujiUrl');
-    
-    // Woaizuji 商家信息元素
-    const woaizujiMerchantCode = document.getElementById('woaizujiMerchantCode');
-    const woaizujiMerchantName = document.getElementById('woaizujiMerchantName');
-
-    // RRZU 元素
-    const rrzuSection = document.getElementById('rrzuSection');
-    const rrzuStatus = document.getElementById('rrzuStatus');
-    const rrzuMerchantCode = document.getElementById('rrzuMerchantCode');
-    const rrzuMerchantName = document.getElementById('rrzuMerchantName');
-    const rrzuCompany = document.getElementById('rrzuCompany');
-    const rrzuLicenseNo = document.getElementById('rrzuLicenseNo');
-    const authorizationValue = document.getElementById('authorizationValue');
-    const cookieValue = document.getElementById('cookieValue');
-    const rrzuTimestamp = document.getElementById('rrzuTimestamp');
-    const rrzuUrl = document.getElementById('rrzuUrl');
-    
+    const merchantList = document.getElementById('merchantList');
     const refreshBtn = document.getElementById('refreshBtn');
     const clearBtn = document.getElementById('clearBtn');
 
     // 更新状态显示
     function updateStatus(type, message) {
         statusElement.className = `status ${type}`;
-        
-        switch(type) {
-            case 'waiting':
-                statusIcon.textContent = '⏳';
-                break;
-            case 'success':
-                statusIcon.textContent = '✅';
-                break;
-            case 'partial':
-                statusIcon.textContent = '🔄';
-                break;
-            case 'error':
-                statusIcon.textContent = '❌';
-                break;
-        }
-        
+        const icons = { waiting: '⏳', success: '✅', partial: '🔄', error: '❌' };
+        statusIcon.textContent = icons[type] || '⏳';
         statusText.textContent = message;
     }
 
-    // 显示Woaizuji数据
-    function displayWoaizujiData(data) {
-        if (data && (data.azjtk || data.merchantCode || data.merchantName)) {
-            azjtkValue.value = data.azjtk || '';
-            woaizujiMerchantCode.value = data.merchantCode || '';
-            woaizujiMerchantName.value = data.merchantName || '';
-            woaizujiTimestamp.textContent = data.timestamp || '未知';
-            woaizujiUrl.textContent = data.url || '未知';
-            woaizujiStatus.textContent = '✅ 已提取';
-            woaizujiStatus.className = 'site-status success';
-            woaizujiSection.style.display = 'block';
-        } else {
-            woaizujiStatus.textContent = '⏳ 等待数据';
-            woaizujiStatus.className = 'site-status waiting';
-            woaizujiSection.style.display = 'none';
+    // 生成商家卡片HTML
+    function createMerchantCard(platform, data) {
+        const platformNames = { woaizuji: '爱租机', rrzu: '人人租' };
+        const platformName = platformNames[platform] || platform;
+
+        // 获取认证字段
+        let authField = '';
+        if (platform === 'woaizuji' && data.azjtk) {
+            authField = `
+                <div class="info-row auth-row">
+                    <span class="label">Token</span>
+                    <div class="auth-value">
+                        <span class="value secret" data-value="${escapeHtml(data.azjtk)}">••••••••</span>
+                        <span class="toggle-eye" title="显示/隐藏">👁</span>
+                        <span class="copy-btn" data-copy="${escapeHtml(data.azjtk)}" title="复制">📋</span>
+                    </div>
+                </div>`;
+        } else if (platform === 'rrzu') {
+            if (data.authorization) {
+                authField += `
+                <div class="info-row auth-row">
+                    <span class="label">Auth</span>
+                    <div class="auth-value">
+                        <span class="value secret" data-value="${escapeHtml(data.authorization)}">••••••••</span>
+                        <span class="toggle-eye" title="显示/隐藏">👁</span>
+                        <span class="copy-btn" data-copy="${escapeHtml(data.authorization)}" title="复制">📋</span>
+                    </div>
+                </div>`;
+            }
+            if (data.cookie) {
+                authField += `
+                <div class="info-row auth-row">
+                    <span class="label">Cookie</span>
+                    <div class="auth-value">
+                        <span class="value secret" data-value="${escapeHtml(data.cookie)}">••••••••</span>
+                        <span class="toggle-eye" title="显示/隐藏">👁</span>
+                        <span class="copy-btn" data-copy="${escapeHtml(data.cookie)}" title="复制">📋</span>
+                    </div>
+                </div>`;
+            }
         }
+
+        return `
+            <div class="merchant-card" data-platform="${platform}">
+                <div class="card-header">
+                    <span class="platform-tag ${platform}">${platformName}</span>
+                    <span class="merchant-name">${data.merchantName || '未知商家'}</span>
+                </div>
+                <div class="card-body">
+                    <div class="info-row">
+                        <span class="label">商家编码</span>
+                        <span class="value">${data.merchantCode || '-'}</span>
+                    </div>
+                    ${authField}
+                    <div class="info-row">
+                        <span class="label">提取时间</span>
+                        <span class="value time">${data.timestamp || '-'}</span>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
-    // 显示RRZU数据
-    function displayRrzuData(data) {
-        console.log('📊 [Popup] displayRrzuData 收到数据:', data);
-        if (data && (data.authorization || data.cookie || data.company || data.licenseNo || data.merchantCode || data.merchantName)) {
-            console.log('📊 [Popup] 显示RRZU数据, merchantCode:', data.merchantCode, 'merchantName:', data.merchantName);
-            rrzuMerchantCode.value = data.merchantCode || '';
-            rrzuMerchantName.value = data.merchantName || '';
-            rrzuCompany.value = data.company || '';
-            rrzuLicenseNo.value = data.licenseNo || '';
-            authorizationValue.value = data.authorization || '';
-            cookieValue.value = data.cookie || '';
-            rrzuTimestamp.textContent = data.timestamp || '未知';
-            rrzuUrl.textContent = data.url || '未知';
-            rrzuStatus.textContent = '✅ 已提取';
-            rrzuStatus.className = 'site-status success';
-            rrzuSection.style.display = 'block';
-        } else {
-            rrzuStatus.textContent = '⏳ 等待数据';
-            rrzuStatus.className = 'site-status waiting';
-            rrzuSection.style.display = 'none';
-        }
+    // HTML转义
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;')
+                  .replace(/</g, '&lt;')
+                  .replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
     }
+
+    // 切换显示/隐藏 & 复制
+    document.addEventListener('click', async function(e) {
+        // 显示/隐藏切换
+        if (e.target.classList.contains('toggle-eye')) {
+            const secretSpan = e.target.parentElement.querySelector('.secret');
+            if (secretSpan.classList.contains('visible')) {
+                secretSpan.textContent = '••••••••';
+                secretSpan.classList.remove('visible');
+                e.target.textContent = '👁';
+            } else {
+                secretSpan.textContent = secretSpan.dataset.value;
+                secretSpan.classList.add('visible');
+                e.target.textContent = '🙈';
+            }
+        }
+
+        // 复制功能
+        if (e.target.classList.contains('copy-btn')) {
+            const value = e.target.dataset.copy;
+            if (!value) return;
+
+            try {
+                await navigator.clipboard.writeText(value);
+                e.target.textContent = '✅';
+                setTimeout(() => { e.target.textContent = '📋'; }, 1000);
+            } catch (err) {
+                // 降级方案
+                const textarea = document.createElement('textarea');
+                textarea.value = value;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                e.target.textContent = '✅';
+                setTimeout(() => { e.target.textContent = '📋'; }, 1000);
+            }
+        }
+    });
 
     // 显示提取的数据
     function displayData(data) {
-        let hasWoaizujiData = data && data.woaizuji && (data.woaizuji.azjtk || data.woaizuji.merchantCode || data.woaizuji.merchantName);
-        let hasRrzuData = data && data.rrzu && (data.rrzu.authorization || data.rrzu.cookie || data.rrzu.company || data.rrzu.licenseNo || data.rrzu.merchantCode || data.rrzu.merchantName);
-        
-        displayWoaizujiData(data ? data.woaizuji : null);
-        displayRrzuData(data ? data.rrzu : null);
-        
+        merchantList.innerHTML = '';
+
+        const isMerchantObject = (value) =>
+            value && typeof value === 'object' && (
+                value.merchantCode || value.merchantName || value.azjtk || value.authorization || value.cookie
+            );
+
+        const normalizeMerchants = (raw) => {
+            if (!raw) return [];
+            if (Array.isArray(raw)) return raw.filter(isMerchantObject);
+            if (isMerchantObject(raw)) return [raw];
+            if (typeof raw === 'object') {
+                return Object.values(raw).filter(isMerchantObject);
+            }
+            return [];
+        };
+
+        const woaizujiList = normalizeMerchants(data?.woaizuji);
+        const rrzuList = normalizeMerchants(data?.rrzu);
+
+        if (woaizujiList.length > 0) {
+            woaizujiList.forEach((merchant) => {
+                merchantList.innerHTML += createMerchantCard('woaizuji', merchant);
+            });
+        }
+
+        if (rrzuList.length > 0) {
+            rrzuList.forEach((merchant) => {
+                merchantList.innerHTML += createMerchantCard('rrzu', merchant);
+            });
+        }
+
         // 更新总体状态
-        if (hasWoaizujiData && hasRrzuData) {
-            updateStatus('success', '已提取两个网站的数据');
-        } else if (hasWoaizujiData || hasRrzuData) {
-            updateStatus('partial', '已提取部分网站数据');
+        if (woaizujiList.length > 0 || rrzuList.length > 0) {
+            const parts = [];
+            if (woaizujiList.length > 0) {
+                parts.push(`爱租机 ${woaizujiList.length} 个`);
+            }
+            if (rrzuList.length > 0) {
+                parts.push(`人人租 ${rrzuList.length} 个`);
+            }
+            const statusType = woaizujiList.length > 0 && rrzuList.length > 0 ? 'success' : 'partial';
+            updateStatus(statusType, `已提取 ${parts.join('，')}`);
         } else {
-            updateStatus('waiting', '等待请求...');
+            updateStatus('waiting', '等待数据...');
         }
     }
 
     // 加载数据
     function loadData() {
-        // 从background script获取数据
         chrome.runtime.sendMessage({type: 'GET_HEADER_DATA'}, (response) => {
             if (chrome.runtime.lastError) {
                 console.error('获取数据失败:', chrome.runtime.lastError);
                 updateStatus('error', '获取数据失败');
                 return;
             }
-            
             displayData(response);
         });
 
-        // 也从storage获取数据
         chrome.storage.local.get(['extractedData'], (result) => {
             if (result.extractedData) {
                 displayData(result.extractedData);
@@ -132,119 +197,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // 为所有复制按钮添加事件监听器
-    document.addEventListener('click', function(event) {
-        if (event.target.classList.contains('copy-btn')) {
-            const targetId = event.target.getAttribute('data-copy-target');
-            if (targetId) {
-                copyValue(targetId);
-            }
-        }
-    });
-
-    // 复制功能
-    async function copyValue(elementId) {
-        const element = document.getElementById(elementId);
-        const value = element.value || element.textContent;
-        
-        if (!value || value.trim() === '') {
-            alert('没有可复制的内容');
-            return;
-        }
-        
-        console.log('尝试复制内容:', value.substring(0, 50) + '...');
-        
-        try {
-            // 首先尝试现代 Clipboard API
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(value);
-                console.log('使用 Clipboard API 复制成功');
-            } else {
-                throw new Error('Clipboard API 不可用');
-            }
-            
-            // 显示复制成功反馈
-            const copyBtn = element.parentNode.querySelector('.copy-btn');
-            const originalText = copyBtn.textContent;
-            copyBtn.textContent = '✅';
-            copyBtn.style.backgroundColor = '#4CAF50';
-            
-            setTimeout(() => {
-                copyBtn.textContent = originalText;
-                copyBtn.style.backgroundColor = '';
-            }, 1000);
-            
-        } catch (err) {
-            console.error('Clipboard API 复制失败:', err);
-            
-            // 降级方案1：使用 document.execCommand
-            try {
-                // 创建临时文本区域
-                const tempTextArea = document.createElement('textarea');
-                tempTextArea.value = value;
-                tempTextArea.style.position = 'fixed';
-                tempTextArea.style.left = '-999999px';
-                tempTextArea.style.top = '-999999px';
-                document.body.appendChild(tempTextArea);
-                
-                tempTextArea.focus();
-                tempTextArea.select();
-                
-                const success = document.execCommand('copy');
-                document.body.removeChild(tempTextArea);
-                
-                if (success) {
-                    console.log('使用 execCommand 复制成功');
-                    const copyBtn = element.parentNode.querySelector('.copy-btn');
-                    const originalText = copyBtn.textContent;
-                    copyBtn.textContent = '✅';
-                    copyBtn.style.backgroundColor = '#4CAF50';
-                    
-                    setTimeout(() => {
-                        copyBtn.textContent = originalText;
-                        copyBtn.style.backgroundColor = '';
-                    }, 1000);
-                } else {
-                    throw new Error('execCommand 复制失败');
-                }
-                
-            } catch (e) {
-                console.error('所有复制方法都失败了:', e);
-                
-                // 最后的降级方案：选中文本让用户手动复制
-                element.focus();
-                element.select();
-                
-                const copyBtn = element.parentNode.querySelector('.copy-btn');
-                copyBtn.textContent = '⚠️';
-                copyBtn.style.backgroundColor = '#ff9800';
-                
-                alert('自动复制失败，内容已选中，请按 Ctrl+C (或 Cmd+C) 手动复制');
-                
-                setTimeout(() => {
-                    copyBtn.textContent = '📋';
-                    copyBtn.style.backgroundColor = '';
-                }, 2000);
-            }
-        }
-    }
-
     // 刷新数据
-    refreshBtn.addEventListener('click', () => {
-        loadData();
-    });
+    refreshBtn.addEventListener('click', loadData);
 
     // 清空数据
     clearBtn.addEventListener('click', () => {
         chrome.storage.local.remove(['extractedData'], () => {
-            woaizujiSection.style.display = 'none';
-            rrzuSection.style.display = 'none';
-            updateStatus('waiting', '数据已清空，等待新请求...');
+            merchantList.innerHTML = '';
+            updateStatus('waiting', '数据已清空');
         });
     });
 
     // 监听来自background的消息
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'HEADER_EXTRACTED') {
             displayData(message.data);
         }

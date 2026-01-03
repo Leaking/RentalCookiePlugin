@@ -8,18 +8,12 @@
 
     // woaizuji orderList 接口的URL标识
     const WOAIZUJI_ORDER_LIST_URL = 'external-gw.woaizuji.com/merchantTeamwork/inside_route_page/merchantOrder/orderList';
-    // rrzu server/detail 接口的URL标识
-    const RRZU_SERVER_DETAIL_URL = 'admin.rrzu.com/server/detail';
     // rrzu orderList 接口的URL标识
     const RRZU_ORDER_LIST_URL = 'go-micro.rrzu.com/order/orderList';
 
 
     function isWoaizujiOrderListUrl(url) {
         return typeof url === 'string' && url.includes(WOAIZUJI_ORDER_LIST_URL);
-    }
-
-    function isRrzuServerDetailUrl(url) {
-        return typeof url === 'string' && url.includes(RRZU_SERVER_DETAIL_URL);
     }
 
     function isRrzuOrderListUrl(url) {
@@ -32,15 +26,6 @@
             type: 'WOAIZUJI_MERCHANT_INFO',
             merchantCode: merchantCode,
             merchantName: merchantName
-        }, '*');
-    }
-
-    // 发送提取到的 rrzu server/detail 数据给 content script
-    function sendRrzuMerchantInfo(company, licenseNo) {
-        window.postMessage({
-            type: 'RRZU_MERCHANT_INFO',
-            company: company,
-            licenseNo: licenseNo
         }, '*');
     }
 
@@ -73,27 +58,6 @@
             }
         } catch (e) {
             console.error('❌ [Injected] 解析woaizuji商家信息失败:', e);
-        }
-    }
-
-    // 从 rrzu server/detail 响应中提取商家信息
-    function extractRrzuMerchantInfo(responseData) {
-        console.log('🔍 [Injected] 提取rrzu商家信息');
-        try {
-            if (responseData &&
-                responseData.data && responseData.data.baseInfo) {
-
-                const baseInfo = responseData.data.baseInfo;
-                const company = baseInfo.company;
-                const licenseNo = baseInfo.license_no;
-
-                if (company || licenseNo) {
-                    console.log('✅ [Injected] 提取到rrzu商家信息:', { company, licenseNo });
-                    sendRrzuMerchantInfo(company || '', licenseNo || '');
-                }
-            }
-        } catch (e) {
-            console.error('❌ [Injected] 解析rrzu商家信息失败:', e);
         }
     }
 
@@ -157,24 +121,6 @@
             });
         }
 
-        // 拦截 rrzu server/detail 请求
-        if (isRrzuServerDetailUrl(url)) {
-            console.log('🎯🎯🎯 [Fetch] 匹配到rrzu server/detail请求!');
-            console.log('🎯 请求URL:', url);
-
-            return originalFetch.apply(this, args).then(response => {
-                console.log('📥 [Fetch] 收到rrzu响应, status:', response.status);
-                const clonedResponse = response.clone();
-                clonedResponse.json().then(data => {
-                    console.log('📦📦📦 [rrzu server/detail 完整响应] ↓↓↓');
-                    console.log(JSON.stringify(data, null, 2));
-                    console.log('📦📦📦 [rrzu server/detail 完整响应] ↑↑↑');
-                    extractRrzuMerchantInfo(data);
-                }).catch(e => console.error('❌ JSON解析失败:', e));
-                return response;
-            });
-        }
-
         // 拦截 rrzu orderList 请求
         if (isRrzuOrderListUrl(url)) {
             console.log('🎯🎯🎯 [Fetch] 匹配到rrzu orderList请求!');
@@ -205,7 +151,6 @@
     XMLHttpRequest.prototype.open = function(method, url, ...args) {
         this._url = url;
         this._isWoaizujiTarget = isWoaizujiOrderListUrl(url);
-        this._isRrzuTarget = isRrzuServerDetailUrl(url);
         this._isRrzuOrderListTarget = isRrzuOrderListUrl(url);
 
         // 打印所有 XHR 请求
@@ -219,10 +164,6 @@
 
         if (this._isWoaizujiTarget) {
             console.log('🎯🎯🎯 [XHR] 匹配到woaizuji orderList请求!');
-            console.log('🎯 请求URL:', url);
-        }
-        if (this._isRrzuTarget) {
-            console.log('🎯🎯🎯 [XHR] 匹配到rrzu server/detail请求!');
             console.log('🎯 请求URL:', url);
         }
         if (this._isRrzuOrderListTarget) {
@@ -245,20 +186,6 @@
                     extractWoaizujiMerchantInfo(data);
                 } catch (e) {
                     console.error('❌ [XHR] 解析woaizuji失败:', e);
-                }
-            });
-        }
-        if (this._isRrzuTarget) {
-            this.addEventListener('load', function() {
-                try {
-                    console.log('📥 [XHR] 收到rrzu响应, status:', this.status);
-                    console.log('📦📦📦 [rrzu server/detail 完整响应] ↓↓↓');
-                    console.log(this.responseText);
-                    console.log('📦📦📦 [rrzu server/detail 完整响应] ↑↑↑');
-                    const data = JSON.parse(this.responseText);
-                    extractRrzuMerchantInfo(data);
-                } catch (e) {
-                    console.error('❌ [XHR] 解析rrzu失败:', e);
                 }
             });
         }

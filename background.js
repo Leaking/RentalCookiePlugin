@@ -1,150 +1,154 @@
-// background.js - 监听网络请求并提取多种header字段
+// background.js - 监听网络请求并提取多种header字段（支持多商家）
 let extractedData = {
-  woaizuji: {
-    azjtk: null,
-    timestamp: null,
-    url: null,
-    merchantCode: null,
-    merchantName: null
-  },
-  rrzu: {
-    authorization: null,
-    cookie: null,
-    timestamp: null,
-    url: null,
-    company: null,
-    licenseNo: null,
-    merchantCode: null,
-    merchantName: null
-  }
+  woaizuji: [],  // 爱租机商家列表
+  rrzu: []       // 人人租商家列表
 };
+
+// 从storage恢复数据
+chrome.storage.local.get(['extractedData'], (result) => {
+  if (result.extractedData) {
+    // 兼容旧数据格式
+    if (Array.isArray(result.extractedData.woaizuji)) {
+      extractedData = result.extractedData;
+    } else {
+      // 转换旧格式到新格式
+      extractedData = { woaizuji: [], rrzu: [] };
+      if (result.extractedData.woaizuji && result.extractedData.woaizuji.merchantCode) {
+        extractedData.woaizuji.push(result.extractedData.woaizuji);
+      }
+      if (result.extractedData.rrzu && result.extractedData.rrzu.merchantCode) {
+        extractedData.rrzu.push(result.extractedData.rrzu);
+      }
+    }
+  }
+});
+
+// 更新或添加商家数据
+function upsertMerchant(platform, newData) {
+  const list = extractedData[platform];
+  const merchantCode = newData.merchantCode;
+
+  if (merchantCode) {
+    // 有 merchantCode，按 merchantCode 匹配
+    const index = list.findIndex(m => m.merchantCode === merchantCode);
+    if (index >= 0) {
+      // 更新现有商家
+      list[index] = { ...list[index], ...newData };
+    } else {
+      // 新增商家
+      list.push(newData);
+    }
+  } else {
+    // 没有 merchantCode，创建临时记录（等待后续补充）
+    // 查找是否有未绑定 merchantCode 的临时记录
+    const tempIndex = list.findIndex(m => !m.merchantCode);
+    if (tempIndex >= 0) {
+      list[tempIndex] = { ...list[tempIndex], ...newData };
+    } else {
+      list.push(newData);
+    }
+  }
+
+  // 保存并通知
+  saveAndNotify();
+}
+
+// 保存数据并通知
+function saveAndNotify(tabId) {
+  chrome.storage.local.set({ extractedData });
+
+  // 通知所有tab
+  chrome.tabs.query({}, (tabs) => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, {
+        type: 'HEADER_EXTRACTED',
+        data: extractedData
+      }).catch(() => {});
+    });
+  });
+}
 
 // 监听网络请求
 chrome.webRequest.onBeforeSendHeaders.addListener(
   function(details) {
-    let dataUpdated = false;
-    
-    // 记录所有请求（调试用）
-    console.log('🌐 检测到请求:', details.url);
-    
-    // 特别关注包含orderList的所有请求
-    if (details.url.includes('orderList')) {
-      console.log('🎯 发现orderList请求!');
-      console.log('完整URL:', details.url);
-      console.log('请求方法:', details.method);
-      console.log('请求类型:', details.type);
-      console.log('发起者:', details.initiator);
-      console.log('Tab ID:', details.tabId);
-      console.log('Frame ID:', details.frameId);
-      console.log('Headers数量:', details.requestHeaders ? details.requestHeaders.length : 0);
-    }
-    
-    // 详细检查rrzu相关请求
-    if (details.url.includes('rrzu.com')) {
-      console.log('🏢 这是rrzu域名的请求:', details.url);
-      console.log('请求方法:', details.method);
-      console.log('请求类型:', details.type);
-      console.log('是否包含orderList:', details.url.includes('orderList'));
-    }
-
     // 检查woaizuji网站的订单列表请求
     if (details.url.includes('external-gw.woaizuji.com/merchantTeamwork/inside_route_page/merchantOrder/orderList')) {
       console.log('检测到woaizuji订单请求:', details.url);
-      
+
       if (details.requestHeaders) {
         for (let header of details.requestHeaders) {
           if (header.name.toLowerCase() === 'azjtk') {
-            extractedData.woaizuji = {
-              azjtk: header.value,
-              timestamp: new Date().toLocaleString('zh-CN'),
-              url: details.url
-            };
-            
-            console.log('提取到azjtk:', header.value);
-            dataUpdated = true;
+            // 先查找是否有匹配此 token 的记录
+            const existingIndex = extractedData.woaizuji.findIndex(m => m.azjtk === header.value);
+            if (existingIndex >= 0) {
+              // 更新时间戳
+              extractedData.woaizuji[existingIndex].timestamp = new Date().toLocaleString('zh-CN');
+              extractedData.woaizuji[existingIndex].url = details.url;
+            } else {
+              // 新增临时记录，等待商家信息
+              extractedData.woaizuji.push({
+                platform: 'aizuji',
+                azjtk: header.value,
+                timestamp: new Date().toLocaleString('zh-CN'),
+                url: details.url,
+                merchantCode: null,
+                merchantName: null
+              });
+            }
+            saveAndNotify();
             break;
           }
         }
       }
     }
-    
-    // 检查rrzu网站的订单列表请求
+
+    // 检查rrzu网站的请求
     if (details.url.includes('rrzu')) {
-      console.log('检测到rrzu订单请求:', details.url);
-      
+      console.log('检测到rrzu请求:', details.url);
+
       if (details.requestHeaders) {
-        let tempData = {
-          authorization: null,
-          cookie: null,
-          timestamp: new Date().toLocaleString('zh-CN'),
-          url: details.url
-        };
-        
+        let authorization = null;
+        let cookie = null;
+
         for (let header of details.requestHeaders) {
           const headerName = header.name.toLowerCase();
           if (headerName === 'authorization') {
-            tempData.authorization = header.value;
-            console.log('提取到authorization:', header.value);
+            authorization = header.value;
           } else if (headerName === 'cookie') {
-            tempData.cookie = header.value;
-            console.log('提取到cookie:', header.value.substring(0, 100) + '...');
+            cookie = header.value;
           }
         }
-        
-        // 只有当至少提取到一个字段时才更新数据
-        if (tempData.authorization || tempData.cookie) {
-          extractedData.rrzu = tempData;
-          dataUpdated = true;
+
+        if (authorization || cookie) {
+          // 查找是否有匹配此 authorization 的记录
+          const existingIndex = extractedData.rrzu.findIndex(m =>
+            m.authorization && m.authorization === authorization
+          );
+
+          if (existingIndex >= 0) {
+            // 更新现有记录
+            extractedData.rrzu[existingIndex].timestamp = new Date().toLocaleString('zh-CN');
+            extractedData.rrzu[existingIndex].url = details.url;
+            if (cookie) extractedData.rrzu[existingIndex].cookie = cookie;
+          } else if (authorization) {
+            // 新增临时记录
+            extractedData.rrzu.push({
+              platform: 'renrenzu',
+              authorization,
+              cookie,
+              timestamp: new Date().toLocaleString('zh-CN'),
+              url: details.url,
+              merchantCode: null,
+              merchantName: null
+            });
+          }
+          saveAndNotify();
         }
       }
     }
-    
-    // 如果有数据更新，保存并通知
-    if (dataUpdated) {
-      // 保存到storage
-      chrome.storage.local.set({ extractedData: extractedData });
-      
-      // 通知content script
-      chrome.tabs.sendMessage(details.tabId, {
-        type: 'HEADER_EXTRACTED',
-        data: extractedData
-      }).catch(() => {
-        // 忽略错误，可能content script还未加载
-      });
-    }
   },
-  {
-    urls: ["<all_urls>"]  // 临时监听所有URL来调试
-  },
+  { urls: ["<all_urls>"] },
   ["requestHeaders"]
-);
-
-// 添加额外的监听器来捕获可能遗漏的请求
-chrome.webRequest.onSendHeaders.addListener(
-  function(details) {
-    if (details.url.includes('go-micro.rrzu.com/order/orderList')) {
-      console.log('📤 onSendHeaders - 检测到rrzu订单请求:', details.url);
-      console.log('📤 请求Headers:', details.requestHeaders);
-    }
-  },
-  {
-    urls: ["https://go-micro.rrzu.com/*"]
-  },
-  ["requestHeaders"]
-);
-
-chrome.webRequest.onBeforeRequest.addListener(
-  function(details) {
-    if (details.url.includes('go-micro.rrzu.com/order/orderList')) {
-      console.log('📥 onBeforeRequest - 检测到rrzu订单请求:', details.url);
-      console.log('📥 请求方法:', details.method);
-      console.log('📥 请求体:', details.requestBody);
-    }
-  },
-  {
-    urls: ["https://go-micro.rrzu.com/*"]
-  },
-  ["requestBody"]
 );
 
 // 监听来自popup和content script的消息
@@ -152,49 +156,67 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'GET_HEADER_DATA') {
     sendResponse(extractedData);
   } else if (request.type === 'MERCHANT_INFO_EXTRACTED') {
-    // 处理来自 content script 的商家信息
     const site = request.site;
+    const { merchantCode, merchantName } = request.data;
+
+    if (!merchantCode) return;
 
     if (site === 'woaizuji') {
-      const { merchantCode, merchantName } = request.data;
-      if (merchantCode || merchantName) {
-        extractedData.woaizuji.merchantCode = merchantCode;
-        extractedData.woaizuji.merchantName = merchantName;
-        console.log('✅ 收到woaizuji商家信息:', { merchantCode, merchantName });
+      // 查找匹配的记录（优先按 merchantCode，其次按无 merchantCode 的临时记录）
+      let index = extractedData.woaizuji.findIndex(m => m.merchantCode === merchantCode);
+      if (index < 0) {
+        index = extractedData.woaizuji.findIndex(m => !m.merchantCode);
       }
-    } else if (site === 'rrzu') {
-      const { company, licenseNo } = request.data;
-      if (company || licenseNo) {
-        extractedData.rrzu.company = company;
-        extractedData.rrzu.licenseNo = licenseNo;
-        console.log('✅ 收到rrzu商家信息:', { company, licenseNo });
+
+      if (index >= 0) {
+        extractedData.woaizuji[index].merchantCode = merchantCode;
+        extractedData.woaizuji[index].merchantName = merchantName;
+        extractedData.woaizuji[index].timestamp = new Date().toLocaleString('zh-CN');
+      } else {
+        // 创建新记录
+        extractedData.woaizuji.push({
+          platform: 'aizuji',
+          merchantCode,
+          merchantName,
+          azjtk: null,
+          timestamp: new Date().toLocaleString('zh-CN'),
+          url: null
+        });
       }
+      console.log('✅ 更新woaizuji商家:', merchantCode, merchantName);
     } else if (site === 'rrzu_order') {
-      const { merchantCode, merchantName } = request.data;
-      if (merchantCode || merchantName) {
-        extractedData.rrzu.merchantCode = merchantCode;
-        extractedData.rrzu.merchantName = merchantName;
-        extractedData.rrzu.timestamp = new Date().toLocaleString('zh-CN');
-        console.log('✅ 收到rrzu orderList商家信息:', { merchantCode, merchantName });
+      let index = extractedData.rrzu.findIndex(m => m.merchantCode === merchantCode);
+      if (index < 0) {
+        index = extractedData.rrzu.findIndex(m => !m.merchantCode);
       }
+
+      if (index >= 0) {
+        extractedData.rrzu[index].merchantCode = merchantCode;
+        extractedData.rrzu[index].merchantName = merchantName;
+        extractedData.rrzu[index].timestamp = new Date().toLocaleString('zh-CN');
+      } else {
+        extractedData.rrzu.push({
+          platform: 'renrenzu',
+          merchantCode,
+          merchantName,
+          authorization: null,
+          cookie: null,
+          timestamp: new Date().toLocaleString('zh-CN'),
+          url: null
+        });
+      }
+      console.log('✅ 更新rrzu商家:', merchantCode, merchantName);
     }
 
-    // 保存到storage
-    chrome.storage.local.set({ extractedData: extractedData });
-
-    // 通知所有tab更新
-    chrome.tabs.query({}, (tabs) => {
-      tabs.forEach(tab => {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'HEADER_EXTRACTED',
-          data: extractedData
-        }).catch(() => {});
-      });
-    });
+    saveAndNotify();
+  } else if (request.type === 'CLEAR_DATA') {
+    extractedData = { woaizuji: [], rrzu: [] };
+    saveAndNotify();
+    sendResponse({ success: true });
   }
 });
 
 // 插件安装时的初始化
 chrome.runtime.onInstalled.addListener(() => {
-  console.log('多站点Header提取器已安装');
+  console.log('租赁信息提取插件已安装');
 });

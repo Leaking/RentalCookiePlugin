@@ -3,134 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AZJTK提取器</title>
+    <title>租赁信息提取</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>🔍 多站点Header提取器</h2>
+            <h2>租赁信息提取</h2>
         </div>
-        
+
         <div class="content">
-            <div class="status-section">
-                <div id="status" class="status waiting">
-                    <span class="status-icon">⏳</span>
-                    <span class="status-text">等待请求...</span>
-                </div>
-            </div>
-            
-            <!-- Woaizuji 数据区域 -->
-            <div class="site-section" id="woaizujiSection" style="display: none;">
-                <div class="site-header">
-                    <h3>🏪 Woaizuji 网站</h3>
-                    <span class="site-status" id="woaizujiStatus">未检测到数据</span>
-                </div>
-                <div class="field">
-                    <label>商家编码:</label>
-                    <div class="value-container">
-                        <input type="text" id="woaizujiMerchantCode" readonly>
-                        <button class="copy-btn" data-copy-target="woaizujiMerchantCode" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>商家名称:</label>
-                    <div class="value-container">
-                        <input type="text" id="woaizujiMerchantName" readonly>
-                        <button class="copy-btn" data-copy-target="woaizujiMerchantName" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>AZJTK值:</label>
-                    <div class="value-container">
-                        <input type="text" id="azjtkValue" readonly>
-                        <button class="copy-btn" data-copy-target="azjtkValue" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>提取时间:</label>
-                    <span id="woaizujiTimestamp" class="timestamp"></span>
-                </div>
-                <div class="field">
-                    <label>请求URL:</label>
-                    <div class="url" id="woaizujiUrl"></div>
-                </div>
+            <!-- 状态提示 -->
+            <div id="status" class="status waiting">
+                <span class="status-icon">⏳</span>
+                <span class="status-text">等待数据...</span>
             </div>
 
-            <!-- RRZU 数据区域 -->
-            <div class="site-section" id="rrzuSection" style="display: none;">
-                <div class="site-header">
-                    <h3>🏢 RRZU 网站</h3>
-                    <span class="site-status" id="rrzuStatus">未检测到数据</span>
-                </div>
-                <div class="field">
-                    <label>商家编码:</label>
-                    <div class="value-container">
-                        <input type="text" id="rrzuMerchantCode" readonly>
-                        <button class="copy-btn" data-copy-target="rrzuMerchantCode" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>商家名称:</label>
-                    <div class="value-container">
-                        <input type="text" id="rrzuMerchantName" readonly>
-                        <button class="copy-btn" data-copy-target="rrzuMerchantName" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>公司名称:</label>
-                    <div class="value-container">
-                        <input type="text" id="rrzuCompany" readonly>
-                        <button class="copy-btn" data-copy-target="rrzuCompany" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>营业执照号:</label>
-                    <div class="value-container">
-                        <input type="text" id="rrzuLicenseNo" readonly>
-                        <button class="copy-btn" data-copy-target="rrzuLicenseNo" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Authorization:</label>
-                    <div class="value-container">
-                        <input type="text" id="authorizationValue" readonly>
-                        <button class="copy-btn" data-copy-target="authorizationValue" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>Cookie:</label>
-                    <div class="value-container">
-                        <textarea id="cookieValue" readonly rows="3"></textarea>
-                        <button class="copy-btn" data-copy-target="cookieValue" title="复制">📋</button>
-                    </div>
-                </div>
-                <div class="field">
-                    <label>提取时间:</label>
-                    <span id="rrzuTimestamp" class="timestamp"></span>
-                </div>
-                <div class="field">
-                    <label>请求URL:</label>
-                    <div class="url" id="rrzuUrl"></div>
-                </div>
-            </div>
-            
+            <!-- 商家列表 -->
+            <div id="merchantList" class="merchant-list"></div>
+
+            <!-- 操作按钮 -->
             <div class="actions">
-                <button id="refreshBtn" class="btn btn-primary">🔄 刷新数据</button>
-                <button id="clearBtn" class="btn btn-secondary">🗑️ 清空数据</button>
-            </div>
-            
-            <div class="instructions">
-                <p>💡 使用说明:</p>
-                <ol>
-                    <li><strong>Woaizuji网站:</strong> 访问 woaizuji.com 相关页面，触发订单列表请求，自动提取azjtk值</li>
-                    <li><strong>RRZU网站:</strong> 访问 go-micro.rrzu.com 相关页面，触发订单列表请求，自动提取authorization和cookie值</li>
-                    <li>点击复制按钮可将对应字段值复制到剪贴板</li>
-                </ol>
+                <button id="refreshBtn" class="btn btn-primary">刷新</button>
+                <button id="clearBtn" class="btn btn-secondary">清空</button>
             </div>
         </div>
     </div>
-    
+
     <script src="popup.js"></script>
 </body>
 </html>

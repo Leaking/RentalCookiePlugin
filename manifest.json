@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "多站点Header提取器",
-  "version": "1.0.0",
-  "description": "提取多个网站请求中的header字段（azjtk、authorization、cookie）",
+  "name": "租赁信息提取",
+  "version": "1.0.1",
+  "description": "自动提取爱租机、人人租平台的商家信息和认证凭证",
   "permissions": [
     "activeTab",
     "storage",
@@ -22,6 +22,24 @@
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://localhost:3000/*",
+        "http://localhost:3001/*",
+        "http://localhost:5173/*",
+        "http://localhost:8080/*",
+        "http://127.0.0.1/*",
+        "http://127.0.0.1:3000/*",
+        "http://127.0.0.1:3001/*",
+        "http://127.0.0.1:5173/*",
+        "http://127.0.0.1:8080/*",
+        "http://8.148.254.149/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
@@ -32,7 +50,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "多站点Header提取器"
+    "default_title": "租赁信息提取"
   },
   "icons": {
   }
