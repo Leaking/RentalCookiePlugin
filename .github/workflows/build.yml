@@ -1,0 +1,33 @@
+name: Build Chrome Extension
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create extension zip
+        run: |
+          zip -r aizuji-plugin.zip . \
+            -x "*.git*" \
+            -x "*.zip" \
+            -x ".claude/*" \
+            -x "references/*" \
+            -x "create_icons.html" \
+            -x "debug_background.js" \
+            -x "README.md" \
+            -x ".github/*"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aizuji-plugin
+          path: aizuji-plugin.zip
+          retention-days: 30
