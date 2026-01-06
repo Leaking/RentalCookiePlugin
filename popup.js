@@ -20,18 +20,32 @@ document.addEventListener('DOMContentLoaded', function() {
         const platformNames = { woaizuji: '爱租机', rrzu: '人人租' };
         const platformName = platformNames[platform] || platform;
 
+        // 商家名称显示逻辑：如果为空，显示等待状态
+        const merchantName = data.merchantName || '<span style="color: #999; font-style: italic;">等待提取...</span>';
+
+        // 商家编码显示逻辑：如果为空，显示等待状态
+        const merchantCode = data.merchantCode || '<span style="color: #999;">等待提取...</span>';
+
         // 获取认证字段
         let authField = '';
-        if (platform === 'woaizuji' && data.azjtk) {
-            authField = `
-                <div class="info-row auth-row">
-                    <span class="label">Token</span>
-                    <div class="auth-value">
-                        <span class="value secret" data-value="${escapeHtml(data.azjtk)}">••••••••</span>
-                        <span class="toggle-eye" title="显示/隐藏">👁</span>
-                        <span class="copy-btn" data-copy="${escapeHtml(data.azjtk)}" title="复制">📋</span>
-                    </div>
-                </div>`;
+        if (platform === 'woaizuji') {
+            if (data.azjtk) {
+                authField = `
+                    <div class="info-row auth-row">
+                        <span class="label">Token</span>
+                        <div class="auth-value">
+                            <span class="value secret" data-value="${escapeHtml(data.azjtk)}">••••••••</span>
+                            <span class="toggle-eye" title="显示/隐藏">👁</span>
+                            <span class="copy-btn" data-copy="${escapeHtml(data.azjtk)}" title="复制">📋</span>
+                        </div>
+                    </div>`;
+            } else {
+                authField = `
+                    <div class="info-row">
+                        <span class="label">Token</span>
+                        <span class="value" style="color: #999; font-style: italic;">等待提取...</span>
+                    </div>`;
+            }
         } else if (platform === 'rrzu') {
             if (data.authorization) {
                 authField += `
@@ -42,6 +56,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         <span class="toggle-eye" title="显示/隐藏">👁</span>
                         <span class="copy-btn" data-copy="${escapeHtml(data.authorization)}" title="复制">📋</span>
                     </div>
+                </div>`;
+            } else {
+                authField += `
+                <div class="info-row">
+                    <span class="label">Auth</span>
+                    <span class="value" style="color: #999; font-style: italic;">等待提取...</span>
                 </div>`;
             }
             if (data.cookie) {
@@ -61,12 +81,12 @@ document.addEventListener('DOMContentLoaded', function() {
             <div class="merchant-card" data-platform="${platform}">
                 <div class="card-header">
                     <span class="platform-tag ${platform}">${platformName}</span>
-                    <span class="merchant-name">${data.merchantName || '未知商家'}</span>
+                    <span class="merchant-name">${merchantName}</span>
                 </div>
                 <div class="card-body">
                     <div class="info-row">
                         <span class="label">商家编码</span>
-                        <span class="value">${data.merchantCode || '-'}</span>
+                        <span class="value">${merchantCode}</span>
                     </div>
                     ${authField}
                     <div class="info-row">
@@ -133,9 +153,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayData(data) {
         merchantList.innerHTML = '';
 
-        // 验证商家对象：必须同时有 merchantCode 和 merchantName
-        const isValidMerchant = (value) =>
-            value && typeof value === 'object' && value.merchantCode && value.merchantName;
+        // 验证商家对象：只要有任何有用的数据就显示（token、merchantCode 或 merchantName 任一存在即可）
+        const isValidMerchant = (value) => {
+            if (!value || typeof value !== 'object') return false;
+            // 有 token（azjtk 或 authorization）或有商家信息即可
+            return value.azjtk || value.authorization || value.merchantCode || value.merchantName;
+        };
 
         const normalizeMerchants = (raw) => {
             if (!raw) return [];
@@ -201,10 +224,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // 清空数据
     clearBtn.addEventListener('click', () => {
-        chrome.storage.local.remove(['extractedData'], () => {
-            merchantList.innerHTML = '';
-            updateStatus('waiting', '数据已清空');
+        // 1. 清空 chrome.storage.local 中的两个存储key
+        chrome.storage.local.remove(['extractedData', 'aizuji_plugin_merchant_data'], () => {
+            console.log('✅ [Popup] chrome.storage.local 数据已清空');
         });
+
+        // 2. 通知 background.js 清空内存中的数据
+        chrome.runtime.sendMessage({ type: 'CLEAR_DATA' }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('❌ [Popup] 通知 background 清空数据失败:', chrome.runtime.lastError);
+            } else {
+                console.log('✅ [Popup] background.js 数据已清空:', response);
+            }
+        });
+
+        // 3. 更新UI显示
+        merchantList.innerHTML = '';
+        updateStatus('waiting', '所有数据已清空');
     });
 
     // 监听来自background的消息

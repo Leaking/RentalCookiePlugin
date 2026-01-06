@@ -45,7 +45,7 @@
             console.log('💾 [Content Script] 数据已保存到 localStorage:', mergedData);
 
             // 同时保存到 chrome.storage.local（供其他域名页面访问）
-            chrome.storage.local.set({ [STORAGE_KEY]: mergedData }, () => {
+            safeStorageSet({ [STORAGE_KEY]: mergedData }, () => {
                 console.log('💾 [Content Script] 数据已同步到 chrome.storage.local');
             });
 
@@ -80,7 +80,78 @@
     }
 
     // ============================================
-    // 1. 注入拦截脚本到页面主世界（使用外部文件绕过 CSP）
+    // 1. 安全的 runtime 消息发送（处理扩展上下文失效）
+    // ============================================
+    function safeRuntimeSendMessage(message, callback) {
+        // 检查扩展上下文是否仍然有效
+        if (!chrome.runtime || !chrome.runtime.id) {
+            console.warn('⚠️ [Content Script] 扩展上下文已失效，跳过消息发送');
+            if (callback) callback(null);
+            return;
+        }
+
+        try {
+            chrome.runtime.sendMessage(message, (response) => {
+                // 检查是否有运行时错误
+                if (chrome.runtime.lastError) {
+                    console.warn('⚠️ [Content Script] runtime.sendMessage 错误:', chrome.runtime.lastError.message);
+                    if (callback) callback(null);
+                    return;
+                }
+                if (callback) callback(response);
+            });
+        } catch (error) {
+            console.warn('⚠️ [Content Script] 发送消息时捕获到异常:', error.message);
+            if (callback) callback(null);
+        }
+    }
+
+    function safeStorageSet(key, value, callback) {
+        // 检查扩展上下文是否仍然有效
+        if (!chrome.runtime || !chrome.runtime.id) {
+            console.warn('⚠️ [Content Script] 扩展上下文已失效，跳过 storage.set');
+            if (callback) callback();
+            return;
+        }
+
+        try {
+            chrome.storage.local.set(key, () => {
+                if (chrome.runtime.lastError) {
+                    console.warn('⚠️ [Content Script] storage.set 错误:', chrome.runtime.lastError.message);
+                }
+                if (callback) callback();
+            });
+        } catch (error) {
+            console.warn('⚠️ [Content Script] storage.set 捕获到异常:', error.message);
+            if (callback) callback();
+        }
+    }
+
+    function safeStorageGet(keys, callback) {
+        // 检查扩展上下文是否仍然有效
+        if (!chrome.runtime || !chrome.runtime.id) {
+            console.warn('⚠️ [Content Script] 扩展上下文已失效，跳过 storage.get');
+            if (callback) callback({});
+            return;
+        }
+
+        try {
+            chrome.storage.local.get(keys, (result) => {
+                if (chrome.runtime.lastError) {
+                    console.warn('⚠️ [Content Script] storage.get 错误:', chrome.runtime.lastError.message);
+                    if (callback) callback({});
+                    return;
+                }
+                if (callback) callback(result);
+            });
+        } catch (error) {
+            console.warn('⚠️ [Content Script] storage.get 捕获到异常:', error.message);
+            if (callback) callback({});
+        }
+    }
+
+    // ============================================
+    // 2. 注入拦截脚本到页面主世界（使用外部文件绕过 CSP）
     // ============================================
     const isTargetSite = window.location.hostname.includes('woaizuji.com') ||
                          window.location.hostname.includes('rrzu.com');
@@ -130,7 +201,7 @@
             console.log('📨 [Content Script] 收到数据请求');
 
             // 从 chrome.storage.local 获取数据（使用统一的 key）
-            chrome.storage.local.get([STORAGE_KEY], (result) => {
+            safeStorageGet([STORAGE_KEY], (result) => {
                 const merchantData = result[STORAGE_KEY] || {};
                 console.log('📦 [Content Script] 从 chrome.storage.local 读取到:', merchantData);
 
@@ -149,7 +220,7 @@
             console.log('📨 [Content Script] 收到woaizuji商家信息:', event.data);
 
             // 转发给 background script
-            chrome.runtime.sendMessage({
+            safeRuntimeSendMessage({
                 type: 'MERCHANT_INFO_EXTRACTED',
                 site: 'woaizuji',
                 data: {
@@ -159,7 +230,7 @@
             });
 
             // 从 background 获取完整数据（包括token）后保存到 localStorage
-            chrome.runtime.sendMessage({ type: 'GET_HEADER_DATA' }, (response) => {
+            safeRuntimeSendMessage({ type: 'GET_HEADER_DATA' }, (response) => {
                 if (response && response.woaizuji) {
                     saveWoaizujiData(
                         event.data.merchantCode,
@@ -178,7 +249,7 @@
             console.log('📨 [Content Script] 收到rrzu orderList商家信息:', event.data);
 
             // 转发给 background script
-            chrome.runtime.sendMessage({
+            safeRuntimeSendMessage({
                 type: 'MERCHANT_INFO_EXTRACTED',
                 site: 'rrzu_order',
                 data: {
@@ -188,7 +259,7 @@
             });
 
             // 从 background 获取完整数据（包括token）后保存到 localStorage
-            chrome.runtime.sendMessage({ type: 'GET_HEADER_DATA' }, (response) => {
+            safeRuntimeSendMessage({ type: 'GET_HEADER_DATA' }, (response) => {
                 if (response && response.rrzu) {
                     saveRrzuData(
                         event.data.merchantCode,
@@ -301,7 +372,7 @@
             try {
                 const existingData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
                 if (Object.keys(existingData).length > 0) {
-                    chrome.storage.local.set({ [STORAGE_KEY]: existingData }, () => {
+                    safeStorageSet({ [STORAGE_KEY]: existingData }, () => {
                         console.log('🔄 [Content Script] 已将 localStorage 数据同步到 chrome.storage.local:', existingData);
                     });
                 }
